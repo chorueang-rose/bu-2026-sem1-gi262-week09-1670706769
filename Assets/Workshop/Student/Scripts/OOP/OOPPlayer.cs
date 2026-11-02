@@ -4,7 +4,6 @@ using UnityEngine.InputSystem;
 
 namespace Solution
 {
-
     public class OOPPlayer : Character
     {
         public Inventory inventory;
@@ -13,16 +12,37 @@ namespace Solution
         private InputAction fireAction;
 
         public bool isAutoMoving = false; // Flag to control auto-movement
-        private object position;
 
         public override void SetUP()
         {
             base.SetUP();
             PrintInfo();
             GetRemainEnergy();
-            inventory = GetComponent<Inventory>();
-            moveAction = InputSystem.actions.FindAction("Move");
-            fireAction = InputSystem.actions.FindAction("Attack");
+
+            // 1. ดึง Inventory component (ถ้ายังไม่ได้ assign ใน Inspector)
+            if (inventory == null)
+            {
+                inventory = GetComponent<Inventory>();
+            }
+
+            // 2. ดึง ActionHistoryManager (ถ้ายังไม่ได้ assign ให้หาในวัตถุเดียวกันหรือค้นหาใน Scene)
+            if (actionHistoryManager == null)
+            {
+                actionHistoryManager = GetComponent<ActionHistoryManager>() ?? FindFirstObjectByType<ActionHistoryManager>();
+            }
+
+            // 3. กำหนดค่า Input System
+            if (InputSystem.actions != null)
+            {
+                moveAction = InputSystem.actions.FindAction("Move");
+                fireAction = InputSystem.actions.FindAction("Attack");
+            }
+        }
+
+        private void Start()
+        {
+            // สั่ง Setup อัตโนมัติเมื่อเริ่มเกม
+            SetUP();
         }
 
         public void Update()
@@ -40,10 +60,12 @@ namespace Solution
 
             Keyboard keyboard = Keyboard.current;
             bool firePressed = fireAction != null && fireAction.triggered;
+
             if (keyboard != null)
             {
                 firePressed |= keyboard.eKey.wasPressedThisFrame;
             }
+
             if (firePressed)
             {
                 UseFireStorm();
@@ -54,43 +76,62 @@ namespace Solution
                 return;
             }
 
-            if (keyboard.zKey.wasPressedThisFrame)
+            // เพิ่มการเช็ค actionHistoryManager != null เพื่อป้องกัน NullReferenceException
+            if (actionHistoryManager != null)
             {
-                actionHistoryManager.UndoLastMove(this);
-            }
-            if (keyboard.xKey.wasPressedThisFrame)
-            {
-                actionHistoryManager.RedoLastMove(this);
-            }
-            if (keyboard.qKey.wasPressedThisFrame)
-            {
-                actionHistoryManager.StartAutoMoveSequence(this);
+                if (keyboard.zKey.wasPressedThisFrame)
+                {
+                    actionHistoryManager.UndoLastMove(this);
+                }
+                if (keyboard.xKey.wasPressedThisFrame)
+                {
+                    actionHistoryManager.RedoLastMove(this);
+                }
+                if (keyboard.qKey.wasPressedThisFrame)
+                {
+                    actionHistoryManager.StartAutoMoveSequence(this);
+                }
             }
         }
+
         public override void Move(Vector2 direction)
         {
             base.Move(direction);
-            mapGenerator.MoveEnemies();
-            // Save the state AFTER the move
-            actionHistoryManager.SaveStateForUndo(new Vector2(positionX, positionY));
-            
 
+            // เช็ค mapGenerator ป้องกัน NullReferenceException
+            if (mapGenerator != null)
+            {
+                mapGenerator.MoveEnemies();
+            }
+
+            // Save the state AFTER the move
+            if (actionHistoryManager != null)
+            {
+                actionHistoryManager.SaveStateForUndo(new Vector2(positionX, positionY));
+            }
         }
 
         public void UseFireStorm()
         {
-            if (inventory.HasItem("FireStorm",1))
+            if (inventory != null && inventory.HasItem("FireStorm", 1))
             {
-                inventory.UseItem("FireStorm",1);
-                OOPEnemy[] enemies = UtilitySortEnemies.SortEnemiesByRemainningEnergy1(mapGenerator);
-                int count = 3;
-                if (count > enemies.Length)
+                inventory.UseItem("FireStorm", 1);
+
+                if (mapGenerator != null)
                 {
-                    count = enemies.Length;
-                }
-                for (int i = 0; i < count; i++)
-                {
-                    enemies[i].TakeDamage(10);
+                    OOPEnemy[] enemies = UtilitySortEnemies.SortEnemiesByRemainningEnergy1(mapGenerator);
+
+                    if (enemies != null)
+                    {
+                        int count = Mathf.Min(3, enemies.Length);
+                        for (int i = 0; i < count; i++)
+                        {
+                            if (enemies[i] != null)
+                            {
+                                enemies[i].TakeDamage(10);
+                            }
+                        }
+                    }
                 }
             }
             else
@@ -98,12 +139,16 @@ namespace Solution
                 Debug.Log("No FireStorm in inventory");
             }
         }
-        
+
         public void Attack(OOPEnemy _enemy)
         {
-            _enemy.TakeDamage(AttackPoint);
-            Debug.Log(_enemy.name + " is energy " + _enemy.energy);
+            if (_enemy != null)
+            {
+                _enemy.TakeDamage(AttackPoint);
+                Debug.Log(_enemy.name + " is energy " + _enemy.energy);
+            }
         }
+
         protected override void CheckDead()
         {
             base.CheckDead();
@@ -112,7 +157,5 @@ namespace Solution
                 Debug.Log("Player is Dead");
             }
         }
-
     }
-
 }

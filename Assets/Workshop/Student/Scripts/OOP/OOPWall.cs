@@ -1,36 +1,58 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
-using UnityEngine.UIElements;
 
 namespace Solution
 {
-
     public class OOPWall : Identity
     {
-        public int Damage;
+        public int Damage = 1;
         public bool IsIceWall;
 
         private void Start()
         {
-            IsIceWall = Random.Range(0, 100) < 20 ? true : false;
+            // สุ่มโอกาส 20% ที่จะเป็นกำแพงน้ำแข็ง
+            IsIceWall = Random.Range(0, 100) < 20;
+
             if (IsIceWall)
             {
-                GetComponent<SpriteRenderer>().color = Color.blue;
+                // เปลี่ยนสีเป็นสีฟ้าถ้าเป็น IceWall (เช็ค null ป้องกัน MissingComponentException)
+                if (TryGetComponent<SpriteRenderer>(out SpriteRenderer spriteRenderer))
+                {
+                    spriteRenderer.color = Color.blue;
+                }
             }
         }
+
         public override bool Hit()
         {
-            if (IsIceWall)
+            // 1. เช็คความปลอดภัยของ mapGenerator และ player
+            if (mapGenerator != null && mapGenerator.player != null)
             {
-                mapGenerator.player.TakeDamage(Damage, IsIceWall);
+                if (IsIceWall)
+                {
+                    mapGenerator.player.TakeDamage(Damage, IsIceWall);
+                }
+                else
+                {
+                    mapGenerator.player.TakeDamage(Damage);
+                }
+
+                // 2. เคลียร์ตำแหน่งกำแพงในแมพ
+                if (mapGenerator.mapdata != null)
+                {
+                    mapGenerator.mapdata[positionX, positionY] = null;
+                }
             }
             else
             {
-                mapGenerator.player.TakeDamage(Damage);
+                Debug.LogWarning("MapGenerator or Player Reference is missing in OOPWall!");
             }
-            mapGenerator.mapdata[positionX, positionY] = null;
+
+            // 3. ทำลายกำแพงออกจาก Scene
             Destroy(gameObject);
+
+            // คืนค่า false (ผู้เล่นเดินเข้าช่องนี้ไม่ได้ หรือไม่ผ่าน)
             return false;
         }
     }

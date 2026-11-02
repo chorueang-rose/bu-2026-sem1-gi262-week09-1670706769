@@ -1,7 +1,8 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-namespace Solution {
+namespace Solution
+{
     public class Inventory : MonoBehaviour
     {
         public Dictionary<string, int> inventory = new Dictionary<string, int>();
@@ -9,6 +10,8 @@ namespace Solution {
         // เพิ่มไอเท็ม
         public void AddItem(string item, int amount)
         {
+            if (amount <= 0) return;
+
             // 1. ตรวจสอบว่ามีไอเท็มนี้ในคลังแล้วหรือยัง
             if (inventory.ContainsKey(item))
             {
@@ -20,46 +23,48 @@ namespace Solution {
                 inventory.Add(item, amount);
             }
 
-            Debug.Log("Added " + amount + " " + item + ". Total: " + inventory[item]);
+            Debug.Log($"Added {amount} {item}. Total: {inventory[item]}");
         }
 
-        // ลบไอเท็ม
+        // ลบ/ใช้ไอเท็ม
         public void UseItem(string item, int amount)
         {
-            //4. ตรวจสอบว่ามีไอเท็มนี้ในคลังหรือไม่
-            if (inventory.ContainsKey(item))
+            if (amount <= 0) return;
+
+            // 1. ตรวจสอบว่ามีไอเท็มเพียงพอต่อการใช้หรือไม่ก่อนทำการหัก
+            if (HasItem(item, amount))
             {
-                // ลบจำนวนไอเท็มออก
                 inventory[item] -= amount;
 
-                // ถ้าจำนวนไอเท็มเหลือ 0 หรือน้อยกว่า ให้ลบไอเท็มออกจาก Dictionary
+                // ถ้าจำนวนไอเท็มเหลือ 0 ให้ลบออกจาก Dictionary
                 if (inventory[item] <= 0)
                 {
                     inventory.Remove(item);
-                    Debug.Log("Removed all " + item + " from inventory.");
+                    Debug.Log($"Removed all {item} from inventory.");
                 }
                 else
                 {
-                    Debug.Log("Removed " + amount + " " + item + ". Remaining: " + inventory[item]);
+                    Debug.Log($"Removed {amount} {item}. Remaining: {inventory[item]}");
                 }
             }
             else
             {
-                Debug.Log("Cannot remove " + item + ". Not found in inventory.");
+                Debug.LogWarning($"Cannot use {item}. Not enough amount or item not found! (Required: {amount}, Has: {GetItemCount(item)})");
             }
         }
+
+        // ตรวจสอบว่ามีไอเท็มในคลังเพียงพอหรือไม่
         public bool HasItem(string item, int amount)
         {
-            //2. ตรวจสอบว่ามีไอเท็มนี้ในคลังหรือไม่ และมีจำนวนเพียงพอหรือไม่
             return inventory.ContainsKey(item) && inventory[item] >= amount;
         }
-        // ตรวจสอบจำนวนไอเท็ม
+
+        // ตรวจสอบจำนวนไอเท็มที่มี
         public int GetItemCount(string item)
         {
-            //3. ตรวจสอบว่ามีไอเท็มนี้ในคลังหรือไม่ ถ้ามีให้คืนค่าจำนวนไอเท็มนั้น
-            if (inventory.ContainsKey(item))
+            if (inventory.TryGetValue(item, out int count))
             {
-                return inventory[item];
+                return count;
             }
             return 0;
         }
@@ -76,9 +81,8 @@ namespace Solution {
 
             foreach (var itemEntry in inventory)
             {
-                Debug.Log(itemEntry.Key + ": " + itemEntry.Value);
+                Debug.Log($"{itemEntry.Key}: {itemEntry.Value}");
             }
         }
     }
 }
-

@@ -1,36 +1,42 @@
 using UnityEngine;
 
-
 namespace Solution
 {
     public class Character : Identity
     {
-        [Header("Character")]
+        [Header("Character Properties")]
         public int energy;
-        public int maxEnergy;
-        public int AttackPoint;
+        public int maxEnergy = 100;
+        public int AttackPoint = 10;
 
         protected bool isAlive;
         protected bool isFreeze;
 
-        public SpriteRenderer spriteRenderer; // ลาก SpriteRenderer ของตัวละครมาใส่ใน Inspector
+        [Header("Sprite Settings")]
+        public SpriteRenderer spriteRenderer;
 
-        // สีที่เราจะใช้ 3 ระดับ
-        [Header("color energy")]
-        public Color normalColor = Color.white;    // สีปกติ
-        public Color damagedColor1 = Color.yellow; // ได้รับความเสียหายระดับ 1 (เช่น HP เหลือ 66%)
-        public Color damagedColor2 = Color.red;    // ได้รับความเสียหายระดับ 2 (เช่น HP เหลือ 33%)
+        [Header("Color Energy Levels")]
+        public Color normalColor = Color.white;    // สีปกติ (HP > 66%)
+        public Color damagedColor1 = Color.yellow; // ได้รับความเสียหายระดับ 1 (HP 34%-66%)
+        public Color damagedColor2 = Color.red;    // ได้รับความเสียหายระดับ 2 (HP <= 33%)
+        public Color freezeColor = Color.blue;     // สีเมื่อติดสถานะ Freeze
 
         public override void SetUP()
         {
+            base.SetUP();
             isAlive = true;
             isFreeze = false;
-            Debug.Log("SetUP " + Name);
-            spriteRenderer = GetComponent<SpriteRenderer>();
-            energy = maxEnergy;
 
-            UpdateSpriteColorBasedOnHealth(); // เริ่มต้นด้วยการตั้งค่าสีตามพลังชีวิตปัจจุบัน
+            if (spriteRenderer == null)
+            {
+                spriteRenderer = GetComponent<SpriteRenderer>();
+            }
+
+            energy = maxEnergy;
+            UpdateSpriteColorBasedOnHealth();
+            Debug.Log("SetUP " + Name);
         }
+
         protected void GetRemainEnergy()
         {
             Debug.Log(name + " : " + energy);
@@ -38,113 +44,144 @@ namespace Solution
 
         public virtual void Move(Vector2 direction)
         {
-            if (isFreeze == true)
+            // หากติด Freeze จะข้ามการเดิน 1 ตา แล้วละลายน้ำแข็งออก
+            if (isFreeze)
             {
-                GetComponent<SpriteRenderer>().color = Color.white;
                 isFreeze = false;
+                UpdateSpriteColorBasedOnHealth(); // คืนสีกลับตาม HP
+                Debug.Log(name + " unfroze!");
                 return;
             }
-            int toX = (int)(positionX + direction.x);
-            int toY = (int)(positionY + direction.y);
 
+            int toX = positionX + (int)direction.x;
+            int toY = positionY + (int)direction.y;
+
+            // ตรวจสอบว่ามีวัตถุอยู่ในช่องเป้าหมายหรือไม่
             if (HasPlacement(toX, toY))
             {
-                bool isCanWalkTo = mapGenerator.GetMapData(toX,toY).Hit();
+                bool isCanWalkTo = mapGenerator.GetMapData(toX, toY).Hit();
                 if (isCanWalkTo)
                 {
                     UpdatePosition(toX, toY);
                 }
-
             }
             else
             {
-                UpdatePosition(toX, toY);
-                TakeDamage(1);
+                // ตรวจสอบว่าพิกัดใหม่อยู่ภายในขอบเขตแผนที่ก่อนย้าย
+                if (mapGenerator != null && toX >= 0 && toX < mapGenerator.X && toY >= 0 && toY < mapGenerator.Y)
+                {
+                    UpdatePosition(toX, toY);
+                    TakeDamage(1); // โดนความเสียหายกรณีเดินเข้าช่องว่าง
+                }
             }
-
         }
 
-        public virtual void UpdatePosition(int toX, int toY)
+        public override void UpdatePosition(int toX, int toY)
         {
-            mapGenerator.mapdata[positionX, positionY] = null;
-            positionX = toX;
-            positionY = toY;
-            transform.position = new Vector3(positionX, positionY, 0);
-            mapGenerator.mapdata[positionX, positionY] = this;
+            if (mapGenerator != null && mapGenerator.mapdata != null)
+            {
+                // เคลียร์ตำแหน่งเดิม
+                if (positionX >= 0 && positionX < mapGenerator.X && positionY >= 0 && positionY < mapGenerator.Y)
+                {
+                    mapGenerator.mapdata[positionX, positionY] = null;
+                }
+
+                // อัปเดตพิกัดใหม่
+                positionX = toX;
+                positionY = toY;
+                transform.position = new Vector3(positionX, positionY, transform.position.z);
+
+                // บันทึกตำแหน่งใหม่ลง MapData
+                mapGenerator.mapdata[positionX, positionY] = this;
+            }
         }
 
-        // hasPlacement คืนค่า true ถ้ามีการวางอะไรไว้บน map ที่ตำแหน่ง x,y
         public bool HasPlacement(int x, int y)
         {
+            if (mapGenerator == null) return false;
+
             var mapData = mapGenerator.GetMapData(x, y);
-            return mapData != null;
+            return mapData != null && mapData != mapGenerator.Wall;
         }
-      
 
-        public virtual void TakeDamage(int Damage)
+        public virtual void TakeDamage(int damage)
         {
-            energy -= Damage;
+            energy -= damage;
             Debug.Log(name + " Current Energy : " + energy);
             UpdateSpriteColorBasedOnHealth();
             CheckDead();
         }
-        public virtual void TakeDamage(int Damage, bool freeze)
+
+        public virtual void TakeDamage(int damage, bool freeze)
         {
-            energy -= Damage;
+            energy -= damage;
             isFreeze = freeze;
-            GetComponent<SpriteRenderer>().color = Color.blue;
             Debug.Log(name + " Current Energy : " + energy);
-            Debug.Log("you is Freeze");
+            Debug.Log(name + " is Frozen!");
+
+            // ปรับสีสไปรต์ตามสถานะ (หาก Freeze ให้เปลี่ยนสีเป็นสีฟ้า)
             UpdateSpriteColorBasedOnHealth();
             CheckDead();
         }
-
 
         public void Heal(int healPoint)
         {
-            // energy += healPoint;
-            // Debug.Log("Current Energy : " + energy);
-            // เราสามารถเรียกใช้ฟังก์ชัน Heal โดยกำหนดให้ Bonuse = false ได้ เพื่อที่จะให้ logic ในการ heal อยู่ที่ฟังก์ชัน Heal อันเดียวและไม่ต้องเขียนซ้ำ
             Heal(healPoint, false);
         }
 
-        public void Heal(int healPoint, bool Bonuse)
+        public void Heal(int healPoint, bool bonus)
         {
-            energy += healPoint * (Bonuse ? 2 : 1);
+            energy += healPoint * (bonus ? 2 : 1);
             if (energy > maxEnergy)
             {
                 energy = maxEnergy;
             }
+
             Debug.Log("Current Energy : " + energy);
+            UpdateSpriteColorBasedOnHealth(); // อัปเดตสีสไปรต์หลังได้รับการฟื้นฟู
         }
 
         protected virtual void CheckDead()
         {
             if (energy <= 0)
             {
-                mapGenerator.mapdata[positionX, positionY] = null;
+                isAlive = false;
+                if (mapGenerator != null && mapGenerator.mapdata != null)
+                {
+                    if (positionX >= 0 && positionX < mapGenerator.X && positionY >= 0 && positionY < mapGenerator.Y)
+                    {
+                        mapGenerator.mapdata[positionX, positionY] = null;
+                    }
+                }
                 Destroy(gameObject);
             }
         }
+
         private void UpdateSpriteColorBasedOnHealth()
         {
             if (spriteRenderer == null) return;
 
+            // ถ้าติด Freeze ให้แสดงสี freezeColor เสมอ
+            if (isFreeze)
+            {
+                spriteRenderer.color = freezeColor;
+                return;
+            }
+
             float healthPercentage = (float)energy / maxEnergy;
 
-            if (healthPercentage > 0.66f) // มากกว่า 66% (เช่น 67%-100%)
+            if (healthPercentage > 0.66f) // HP > 66%
             {
                 spriteRenderer.color = normalColor;
             }
-            else if (healthPercentage > 0.33f) // มากกว่า 33% แต่ไม่เกิน 66% (เช่น 34%-66%)
+            else if (healthPercentage > 0.33f) // HP 34%-66%
             {
                 spriteRenderer.color = damagedColor1;
             }
-            else // 33% หรือน้อยกว่า
+            else // HP <= 33%
             {
                 spriteRenderer.color = damagedColor2;
             }
-            Debug.Log(name + " Health Percentage: " + (healthPercentage * 100) + "%");
         }
     }
 }
